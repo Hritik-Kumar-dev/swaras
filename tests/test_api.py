@@ -246,6 +246,27 @@ def test_every_element_the_script_uses_exists_in_the_page(client: TestClient) ->
     assert not missing, f"app.js refers to ids absent from index.html: {missing}"
 
 
+def test_page_declares_an_inline_favicon(client: TestClient) -> None:
+    """A missing favicon makes every page load log a 404 for /favicon.ico.
+
+    Browsers request it automatically whether or not the page asks for one, so
+    the fix is a <link rel="icon"> with a data URI: that costs no extra request
+    and needs no route.
+    """
+    import re
+
+    html = client.get("/").text
+    match = re.search(r'<link rel="icon" href="([^"]+)"', html)
+    assert match, "no <link rel=icon>, so browsers will request /favicon.ico"
+    href = match.group(1)
+    assert href.startswith("data:image/svg+xml,"), "favicon should be inline, not a request"
+    # It has to be well-formed XML, or the browser silently ignores it.
+    import urllib.parse
+    import xml.dom.minidom
+
+    xml.dom.minidom.parseString(urllib.parse.unquote(href.split(",", 1)[1]))
+
+
 def test_tab_bodies_are_named_after_their_tab_buttons(client: TestClient) -> None:
     """The tab switcher builds ids as ``tab-<name>``; they must all exist."""
     import re
