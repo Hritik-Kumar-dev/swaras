@@ -1,0 +1,49 @@
+{
+  "name": "22-shruti just intonation (default)",
+  "description": "Default tuning table for Indian classical swaras. 22 shrutis per octave, 1-cent resolution, derived from Carnatic/Hindustani just-intonation practice (22-shruti swara-sthayi scheme).",
+  "reference_semitone_width_cents": 100.0,
+  "assumptions": [
+    "The 22 shrutis form 11 pairs 22-23 cents wide, plus two singletons (Sa = 0 and Pa = 702).",
+    "Each pair collapses to one of the 12 swara positions used by Level A; the pair's nominal (Level A) cents is the mean of the two shruti values.",
+    "A 22-cent pair means one swara position is reachable at two slightly different pitches. Performance chooses between them (and the code reports the deviation, not a hard label).",
+    "Octave of the table: 0-1199 cents. Values repeat at +1200 cents."
+  ],
+  "swar_positions": [
+    { "name": "Sa",        "short": "S",  "cents": 0,    "alternate": null },
+    { "name": "Re komal",  "short": "r",  "cents": 101,  "alternate": "komal Re" },
+    { "name": "Re",        "short": "R",  "cents": 193,  "alternate": "shuddha Re" },
+    { "name": "Ga komal",  "short": "g",  "cents": 305,  "alternate": "komal Ga" },
+    { "name": "Ga",        "short": "G",  "cents": 397,  "alternate": "shuddha Ga" },
+    { "name": "Ma",        "short": "M",  "cents": 508,  "alternate": "shuddha Ma" },
+    { "name": "Ma tivra",  "short": "Mt", "cents": 601,  "alternate": "tivra Ma" },
+    { "name": "Pa",        "short": "P",  "cents": 702,  "alternate": "shuddha Pa" },
+    { "name": "Dha komal", "short": "d",  "cents": 803,  "alternate": "komal Dha" },
+    { "name": "Dha",       "short": "D",  "cents": 895,  "alternate": "shuddha Dha" },
+    { "name": "Ni komal",  "short": "n",  "cents": 1007, "alternate": "komal Ni" },
+    { "name": "Ni",        "short": "N",  "cents": 1099, "alternate": "shuddha Ni" }
+  ],
+  "shrutis": [
+    { "index": 0,  "cents": 0,    "swar": "Sa",        "variant": "shuddha" },
+    { "index": 1,  "cents": 90,   "swar": "Re komal",  "variant": "low" },
+    { "index": 2,  "cents": 112,  "swar": "Re komal",  "variant": "high" },
+    { "index": 3,  "cents": 182,  "swar": "Re",        "variant": "low" },
+    { "index": 4,  "cents": 204,  "swar": "Re",        "variant": "high" },
+    { "index": 5,  "cents": 294,  "swar": "Ga komal",  "variant": "low" },
+    { "index": 6,  "cents": 316,  "swar": "Ga komal",  "variant": "high" },
+    { "index": 7,  "cents": 386,  "swar": "Ga",        "variant": "low" },
+    { "index": 8,  "cents": 408,  "swar": "Ga",        "variant": "high" },
+    { "index": 9,  "cents": 498,  "swar": "Ma",        "variant": "low" },
+    { "index": 10, "cents": 519,  "swar": "Ma",        "variant": "high" },
+    { "index": 11, "cents": 590,  "swar": "Ma tivra",  "variant": "low" },
+    { "index": 12, "cents": 612,  "swar": "Ma tivra",  "variant": "high" },
+    { "index": 13, "cents": 702,  "swar": "Pa",        "variant": "shuddha" },
+    { "index": 14, "cents": 792,  "swar": "Dha komal", "variant": "low" },
+    { "index": 15, "cents": 814,  "swar": "Dha komal", "variant": "high" },
+    { "index": 16, "cents": 884,  "swar": "Dha",       "variant": "low" },
+    { "index": 17, "cents": 906,  "swar": "Dha",       "variant": "high" },
+    { "index": 18, "cents": 996,  "swar": "Ni komal",  "variant": "low" },
+    { "index": 19, "cents": 1018, "swar": "Ni komal",  "variant": "high" },
+    { "index": 20, "cents": 1088, "swar": "Ni",        "variant": "low" },
+    { "index": 21, "cents": 1110, "swar": "Ni",        "variant": "high" }
+  ]
+}
