@@ -34,13 +34,28 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Essentia is optional but recommended. It is a native dependency and only ships
-prebuilt wheels for Linux and macOS; on Windows use WSL or Docker. Without it
-the pipeline falls back to librosa pYIN and a NumPy tonic detector.
+Essentia is optional but recommended, and it is deliberately not a hard
+dependency: it is a native package with prebuilt wheels for Linux and macOS
+only, so on Windows it has to go inside WSL or a container. Without it the
+pipeline falls back to librosa pYIN and a NumPy tonic detector.
 
 ```bash
-pip install essentia   # TonicIndianArtMusic + PredominantPitchMelodia
+pip install 'swaras[essentia]'   # adds TonicIndianArtMusic + PredominantPitchMelodia
 ```
+
+If you skip it, the default `--detector melodia` will tell you so and exit,
+rather than failing with a traceback:
+
+```
+error: Melodia F0 tracking needs Essentia, which is not installed. Either:
+  pip install 'swaras[essentia]'   (Linux and macOS)
+or use the fallback:  --detector pyin
+```
+
+Essentia prints one `[ INFO ] MusicExtractorSVM ...` line to **stderr** on
+import. It is harmless: stdout stays clean, so `swar transcribe --plain` pipes
+to a file without it. It is emitted by Essentia's C++ layer at import time and
+cannot be silenced from Python.
 
 ### Why two F0 trackers
 

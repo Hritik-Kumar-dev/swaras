@@ -9,3 +9,5 @@ out/
 # ones are generated; the rest are LibriSpeech excerpts fetched over the
 # network, which should not live in the repository.
 samples/
+dist/
+build/
