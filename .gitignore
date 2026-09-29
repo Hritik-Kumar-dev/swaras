@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+out/
+*.egg-info/
+.pytest_cache/
+
+# Audio samples are rebuilt with `python scripts/fetch_samples.py`. The synthetic
+# ones are generated; the rest are LibriSpeech excerpts fetched over the
+# network, which should not live in the repository.
+samples/
