@@ -24,6 +24,10 @@ notation, from the command line or a browser.
 | 5 | `shruti` (22-shruti layer) | done |
 | 6 | `api`, `web` | done |
 
+> **New here? Start with [HOWTO.md](HOWTO.md)** — a step-by-step guide to
+> installing, running, testing and building, with the expected output of every
+> command.
+
 ## Setup
 
 Requires Python 3.11 or newer.
