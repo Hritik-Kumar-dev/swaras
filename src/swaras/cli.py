@@ -85,6 +85,12 @@ def _cmd_transcribe(args: argparse.Namespace) -> int:
     except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except RuntimeError as exc:
+        # A missing optional backend. The message is for the user, not a
+        # traceback: the most likely cause is a plain `pip install swaras`
+        # on a machine without Essentia, and the fix is one command.
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     t = result.transcription
     if args.json:

@@ -130,13 +130,17 @@ def require_essentia(feature: str) -> Any:
         The ``essentia.standard`` module.
 
     Raises:
-        RuntimeError: If Essentia is not installed.
+        RuntimeError: If Essentia is not installed. The message names the
+            install command and the fallback, because this is the first thing
+            a new user hits on a plain ``pip install swaras`` and a traceback
+            would be a poor way to learn it.
     """
     es = get_essentia()
     if es is None:
         raise RuntimeError(
-            f"{feature} requires Essentia, which is not installed. "
-            "Install it with `pip install essentia` (Linux/macOS) or use the "
-            "NumPy fallback paths."
+            f"{feature} needs Essentia, which is not installed. Either:\n"
+            "  pip install 'swaras[essentia]'   (Linux and macOS)\n"
+            "or use the fallback:  --detector pyin\n"
+            "On Windows, install Essentia inside WSL or a container."
         )
     return es
