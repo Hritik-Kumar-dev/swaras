@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio to Swar</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>Audio to Swar</h1>
+  <p class="sub">Transcribe a melodic recording as Indian swar notation.</p>
+</header>
+
+<main>
+  <section class="panel" id="input-panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="upload">Upload</button>
+      <button class="tab" data-tab="record">Record</button>
+    </div>
+
+    <div class="tab-body active" id="tab-upload">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file" accept="audio/*" hidden>
+        <span class="dz-title">Drop an audio file, or click to choose</span>
+        <span class="dz-hint">wav, flac, ogg, mp3, m4a &middot; up to 50 MB</span>
+      </label>
+    </div>
+
+    <div class="tab-body" id="tab-record">
+      <div class="recorder">
+        <button id="record" class="rec">Record</button>
+        <button id="stop" class="rec stop" hidden>Stop</button>
+        <span id="rec-time" class="rec-time">0:00</span>
+      </div>
+      <p class="hint">Records from your microphone. Nothing is uploaded until you press Transcribe.</p>
+      <audio id="playback" controls hidden></audio>
+    </div>
+
+    <div class="controls">
+      <label>Detector
+        <select id="detector">
+          <option value="melodia">Melodia (Essentia)</option>
+          <option value="pyin">pYIN (librosa)</option>
+        </select>
+      </label>
+      <label>Sa (Hz)
+        <input type="number" id="sa" step="0.01" min="20" max="4000" placeholder="auto">
+      </label>
+      <button id="go" class="primary" disabled>Transcribe</button>
+    </div>
+    <p class="hint" id="sa-hint">Leave Sa blank to detect it.</p>
+  </section>
+
+  <section class="panel" id="result-panel" hidden>
+    <div class="result-head">
+      <div>
+        <h2>Notation</h2>
+        <output id="notation" class="notation"></output>
+      </div>
+      <button id="copy" class="copy">Copy</button>
+    </div>
+
+    <div class="sa-block">
+      <div class="sa-main">
+        <span class="label">Sa</span>
+        <strong id="sa-hz">&mdash;</strong>
+        <span class="muted" id="sa-meta"></span>
+      </div>
+      <div class="sa-alts" id="sa-alts"></div>
+      <div class="sa-fix">
+        <input type="number" id="sa-fix" step="0.01" min="20" max="4000" placeholder="correct Sa in Hz">
+        <button id="apply-sa" class="primary small">Re-transcribe</button>
+      </div>
+      <p class="hint" id="sa-warning"></p>
+    </div>
+
+    <div class="switches">
+      <label class="switch"><input type="checkbox" id="show-shruti"> 22-shruti</label>
+      <label class="switch"><input type="checkbox" id="show-detail" checked> Per-note detail</label>
+    </div>
+
+    <div id="shruti-block" hidden>
+      <h3>22-shruti layer</h3>
+      <output id="shruti-line" class="shruti-line"></output>
+      <p class="hint" id="shruti-stats"></p>
+    </div>
+
+    <div id="detail-block">
+      <h3>Notes</h3>
+      <div class="table-wrap">
+        <table id="notes">
+          <thead><tr>
+            <th>#</th><th>swar</th><th>label</th><th>start</th><th>dur</th>
+            <th>cents</th><th>dev</th><th>shruti</th><th>s-dev</th><th>conf</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="muted meta" id="meta"></p>
+  </section>
+
+  <section class="panel error" id="error-panel" hidden>
+    <h2>Could not transcribe</h2>
+    <p id="error-text"></p>
+  </section>
+</main>
+
+<div id="busy" class="busy" hidden><div class="spinner"></div><span id="busy-text">Working…</span></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
