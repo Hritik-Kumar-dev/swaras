@@ -284,9 +284,14 @@ line and a per-note table (start, duration, cents, deviation, matched shruti,
 shruti deviation, confidence) are behind two toggles. If the contour has
 expired the UI says so and asks for a re-upload rather than failing silently.
 
-The test suite cross-checks that every element id `app.js` reaches for exists
-in `index.html` and that every URL it posts to is a real route, which catches
-the likeliest front-end bug without needing a browser in the loop.
+The front end is checked two ways, because no browser is available in the test
+loop. Statically, from the API tests: every element id `app.js` reaches for must
+exist in `index.html`, and every URL it posts to must be a real route. And
+behaviourally, by `tests/frontend_check.js`, which runs the real script under
+node against a minimal DOM and drives it: a request that never settles must
+still clear the busy overlay. That last check exists because the overlay *could*
+stick for ever -- `fetch` has no timeout of its own -- and neither a static
+check nor the Python suite could see it. It skips where node is absent.
 
 ## The 22-shruti layer (Stage 5)
 
@@ -458,7 +463,7 @@ missing, and the tables quoted above are reproducible without them.
 | `test_tuning.py` | the 22-shruti table contents, the shruti-to-swara mapping, and loader validation |
 | `test_segment.py` | normalization, all 12 swara positions, octave markers, segmentation (meends, vibrato, blips, rests, octave spikes), the round trip, output formatting |
 | `test_shruti.py` | all 22 shrutis reachable and self-matching, signed deviation, the confidence V-curve, clarity margins, octave handling, output |
-| `test_api.py` | both endpoints, the contour cache (LRU, TTL, content keying), upload limits, error codes, and the front-end wiring between `app.js` and `index.html` |
+| `test_api.py` | both endpoints, the contour cache (LRU, TTL, content keying), upload limits, error codes, the front-end wiring between `app.js` and `index.html`, and the node-driven behaviour check |
 
 Three measurement scripts print the accuracy tables quoted above:
 
