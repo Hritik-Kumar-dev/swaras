@@ -115,9 +115,35 @@ $("stop").addEventListener("click", () => {
 
 /* --- requests ------------------------------------------------------------ */
 
+/* The busy overlay must never be able to stick. fetch() has no timeout of its
+ * own, so a request that never settles would leave the spinner up for ever and
+ * the page would look permanently frozen. Every call therefore carries an
+ * AbortController deadline, and a visible elapsed counter runs alongside it so
+ * a genuinely slow job reads as slow rather than as hung. */
+let busyTimer = null;
+let busyStarted = 0;
+
 function busy(on, text) {
   $("busy").hidden = !on;
   $("busy-text").textContent = text || "Working…";
+  clearInterval(busyTimer);
+  busyTimer = null;
+  if (on) {
+    busyStarted = Date.now();
+    busyTimer = setInterval(() => {
+      const s = Math.round((Date.now() - busyStarted) / 1000);
+      $("busy-text").textContent = `${text || "Working…"} (${s}s)`;
+    }, 1000);
+  }
+}
+
+/** Raise a fetch failure to something a user can act on. */
+function friendlyError(err) {
+  if (err && err.name === "AbortError") {
+    return "The server took too long to answer and the request was cancelled. " +
+      "Try a shorter excerpt, or --detector pyin, which is lighter than Melodia.";
+  }
+  return err && err.message ? err.message : "unexpected error";
 }
 
 function showError(message) {
@@ -126,8 +152,15 @@ function showError(message) {
   $("result-panel").hidden = true;
 }
 
-async function post(url, options) {
-  const res = await fetch(url, options);
+async function post(url, options, timeoutMs = 300000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   let body = null;
   try {
     body = await res.json();
@@ -156,7 +189,7 @@ $("go").addEventListener("click", async () => {
     state.contourId = data.contour_id || null;
     render(data);
   } catch (err) {
-    showError(err.message);
+    showError(friendlyError(err));
   } finally {
     busy(false);
   }
@@ -186,7 +219,7 @@ async function retune(saHz) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contour_id: state.contourId, sa_hz: saHz }),
-    });
+    }, 30000);
     // A corrected Sa replaces the detection, so the old alternatives are no
     // longer meaningful and are not carried over.
     data.sa.candidates = [];
@@ -194,7 +227,7 @@ async function retune(saHz) {
     state.result = data;
     render(data);
   } catch (err) {
-    $("sa-warning").textContent = err.message;
+    $("sa-warning").textContent = friendlyError(err);
   } finally {
     busy(false);
   }
@@ -298,13 +331,22 @@ $("copy").addEventListener("click", async () => {
 
 /* --- startup check ------------------------------------------------------- */
 
-fetch("/health")
+const status = $("server-status");
+fetch("/health", { signal: AbortSignal.timeout(10000) })
   .then((r) => r.json())
   .then((h) => {
+    const which = h.essentia ? "Melodia + pYIN" : "pYIN only (no Essentia)";
+    status.textContent = `server connected · ${which}`;
+    status.className = "status ok";
     if (!h.essentia) {
       const opt = $("detector").querySelector('option[value="melodia"]');
       opt.disabled = true;
       $("detector").value = "pyin";
     }
   })
-  .catch(() => {});
+  .catch((err) => {
+    status.textContent = err.name === "TimeoutError"
+      ? "server did not answer within 10s"
+      : "cannot reach the server";
+    status.className = "status bad";
+  });

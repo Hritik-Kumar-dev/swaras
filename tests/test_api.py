@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -244,6 +245,29 @@ def test_every_element_the_script_uses_exists_in_the_page(client: TestClient) ->
     used = set(re.findall(r'\$\("([^"]+)"\)', js))
     missing = sorted(used - page_ids)
     assert not missing, f"app.js refers to ids absent from index.html: {missing}"
+
+
+def test_frontend_logic_is_checked_under_node() -> None:
+    """Run tests/frontend_check.js if node is available.
+
+    The Python suite cannot see a stuck spinner: a `fetch` that never settles
+    leaves the page looking permanently busy, and nothing in the API responds.
+    That bug is real -- there were no request deadlines at all -- so the
+    front-end logic is driven under a minimal DOM instead. Skipped, not failed,
+    where node is absent, since it is a development-only dependency.
+    """
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed; front-end logic check skipped")
+    script = Path(__file__).with_name("frontend_check.js")
+    root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [node, str(script)], capture_output=True, text=True, cwd=root, timeout=60
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_page_declares_an_inline_favicon(client: TestClient) -> None:

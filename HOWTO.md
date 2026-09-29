@@ -243,6 +243,10 @@ INFO:     127.0.0.1:53316 - "GET /v1/models HTTP/1.1" 404 Not Found
 The line that actually tells you the UI loaded is `GET / HTTP/1.1 200 OK`, with
 `/style.css` and `/app.js` beside it.
 
+Under the controls there is a status line. It reads **"server connected"** once
+the page has reached the API, and **"cannot reach the server"** if it has not.
+Check that line first: it answers "is the backend up?" without leaving the page.
+
 Then:
 
 1. **Upload** a file, or **Record** from your microphone.
@@ -268,6 +272,23 @@ Options: `swar serve --port 9000`, `--host 0.0.0.0`, `--reload`.
 > works regardless.
 
 ---
+
+### If the page looks stuck
+
+1. **Read the status line.** "cannot reach the server" means the page never got
+   a reply; stop and start `swar serve` again.
+2. **Watch the elapsed counter.** The overlay counts seconds, so a slow job
+   looks slow rather than frozen. A long recording genuinely takes a while.
+   Requests have a 5-minute deadline and a re-tune 30 s, after which the page
+   gives up with a message rather than spinning for ever.
+3. **Test in a private window.** This is worth doing if you see `/v1/models` in
+   the log. That request is not made by this app, so an extension or an AI
+   assistant on your machine is configured to talk to `localhost:8000`. In a
+   private window with extensions disabled it should vanish, and the page
+   should behave normally. That also isolates any extension that might be
+   intercepting or slowing the page.
+4. **Try a shorter excerpt.** The pipeline is one long synchronous request, so
+   cost grows with duration. Thirty seconds is plenty to check it works.
 
 ## 8. Check the accuracy yourself
 
@@ -415,7 +436,8 @@ changes.
 | One note split into several | Vibrato deeper than ~80 cents, or a slow meend. See "Known limitations" in the README. |
 | Escaped `&` or wrong characters in the UI | Serve the page, don't open `index.html` from disk — it calls the API. |
 | `GET /favicon.ico 404` in the server log | Fixed since the favicon became inline. Harmless if you see it. |
-| `GET /v1/models 404` in the server log | Harmless, and not this app. A browser extension or injected script is probing for an OpenAI-compatible API. This server has no `/v1` routes. |
+| `GET /v1/models 404` in the server log | Harmless, and not this app. Something outside it is probing for an OpenAI-compatible API — usually a browser extension or an AI assistant configured to point at `localhost:8000`. There are no `/v1` routes here. See "The page looks stuck" below. |
+| The page spins and never finishes | Check the `server connected` line under the controls. If it says connected, the request reached the server; if not, it did not. Long audio can take a while — the overlay shows an elapsed count. |
 | `[ INFO ] MusicExtractorSVM` on startup | Essentia's own banner, on stderr. Harmless. |
 | `getUserMedia` blocked | Microphone needs `https://` or `localhost`. |
 

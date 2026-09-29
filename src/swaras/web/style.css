@@ -130,6 +130,9 @@ td.num { font-variant-numeric: tabular-nums; }
 td.swar { color: var(--accent); font-weight: 600; }
 
 .hint { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+.status { font-size: 12.5px; margin: 6px 0 0; color: var(--muted); }
+.status.ok { color: var(--accent-2); }
+.status.bad { color: var(--danger); }
 .muted { color: var(--muted); }
 .meta { font-size: 12px; margin-top: 16px; }
 #sa-warning { color: var(--accent); }
