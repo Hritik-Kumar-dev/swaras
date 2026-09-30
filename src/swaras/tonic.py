@@ -543,6 +543,20 @@ def _is_at_search_edge(hz: float, params: TonicParams) -> bool:
     return hz <= params.essentia_min_tonic_hz + edge or hz >= params.essentia_max_tonic_hz - edge
 
 
+def _octave_equivalent_delta(a_hz: float, b_hz: float) -> float:
+    """Cents between two pitches ignoring their octave.
+
+    Args:
+        a_hz: First pitch in Hz.
+        b_hz: Second pitch in Hz.
+
+    Returns:
+        The pitch-class difference in cents, in ``[0, 600]``.
+    """
+    delta = abs(float(hz_to_cents(b_hz, a_hz))) % OCTAVE_CENTS
+    return float(min(delta, OCTAVE_CENTS - delta))
+
+
 def merge_essentia(
     result: TonicResult,
     essentia_hz: float | None,
@@ -550,9 +564,27 @@ def merge_essentia(
 ) -> TonicResult:
     """Fold Essentia's answer into the histogram ranking.
 
-    Agreement raises the candidate's confidence. Disagreement is kept visible:
-    the raw Essentia value is retained in the result and a warning is attached,
-    so the UI can offer it as an alternative instead of silently discarding it.
+    Agreement is judged on the pitch class, ignoring the octave, because
+    Essentia's tonic model is octave-uncertain in exactly the way the rest of
+    this stage expects: over eight tonics on a tanpura-style drone it named the
+    right pitch class 4 times out of 8 but the right octave only 1 time in 8,
+    while on drone-less material it was 62 to 560 cents off in pitch class every
+    time. Treating a shared pitch class as support therefore recognises real
+    evidence where the alternative -- comparing raw frequencies -- threw it
+    away, and it does not manufacture agreement where there is none.
+
+    The fifth-away misses stay misses, and that is deliberate. A wrong fifth is
+    a different note, not an uncertain register, so folding to the octave is
+    the furthest this goes.
+
+    A direct hit is weighted higher than an octave-shifted one, because an
+    octave error is evidence about the note and against the register at the
+    same time. The two cases are recorded separately in the candidate's
+    ``methods`` so the distinction survives into the output.
+
+    Disagreement is kept visible: the raw Essentia value is retained and a
+    warning is attached, so the UI can offer it as an alternative instead of
+    silently discarding it.
 
     Args:
         result: The histogram result.
@@ -581,24 +613,30 @@ def merge_essentia(
 
     merged: list[TonicCandidate] = []
     matched = False
+    exact = False
     for c in result.candidates:
-        delta = abs(float(hz_to_cents(essentia_hz, c.hz)))
-        if delta <= p.essentia_agree_cents:
-            matched = True
-            merged.append(
-                TonicCandidate(
-                    hz=c.hz, cents=c.cents,
-                    score=c.score * p.essentia_agreement_boost,
-                    confidence=c.confidence,
-                    sa_peak=c.sa_peak, pa_peak=c.pa_peak, octave_peak=c.octave_peak,
-                    # Set order rather than sorted(): the methods are a
-                    # pipeline provenance trail (histogram first, Essentia
-                    # added by this call), not an alphabetical list.
-                    methods=(*c.methods, "essentia"),
-                )
-            )
+        direct = abs(float(hz_to_cents(essentia_hz, c.hz)))
+        folded = _octave_equivalent_delta(essentia_hz, c.hz) if p.essentia_ignore_octave else direct
+        if direct <= p.essentia_agree_cents:
+            boost, label = p.essentia_agreement_boost, "essentia"
+            exact = True
+        elif folded <= p.essentia_agree_cents:
+            # Same pitch class, different octave. The octave is one step of
+            # 1200 cents away, so the two really do name the same note.
+            boost, label = p.essentia_octave_boost, "essentia-octave"
         else:
+            boost, label = 1.0, None
+        if label is None:
             merged.append(c)
+            continue
+        matched = True
+        merged.append(
+            TonicCandidate(
+                hz=c.hz, cents=c.cents, score=c.score * boost, confidence=c.confidence,
+                sa_peak=c.sa_peak, pa_peak=c.pa_peak, octave_peak=c.octave_peak,
+                methods=(*c.methods, label),
+            )
+        )
     if not matched:
         warning = (
             f"essentia suggested {essentia_hz:.1f} Hz, which does not match the histogram "
@@ -606,10 +644,14 @@ def merge_essentia(
             f"essentia suggested {essentia_hz:.1f} Hz"
         )
         logger.info("%s", warning)
-    # Re-sort: the agreement boost can promote a lower-ranked candidate above
-    # the one that was first, and TonicResult.hz reads candidates[0]. Skipping
-    # this made the reported best candidate disagree with the highest
-    # confidence in the list.
+    elif not exact:
+        warning = (
+            f"essentia suggested {essentia_hz:.1f} Hz, an octave away from the "
+            f"chosen Sa; treated as pitch-class agreement only"
+        )
+        logger.info("%s", warning)
+    # Re-sort: a boost can promote a lower-ranked candidate, and
+    # TonicResult.hz reads candidates[0].
     merged.sort(key=lambda c: -c.score)
     top = max((c.score for c in merged), default=1.0) or 1.0
     return TonicResult(

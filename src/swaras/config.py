@@ -109,10 +109,35 @@ class TonicParams:
     w_octave: float = 0.45
     #: Weight of the lowest-note prior. Peak scoring alone cannot separate Sa
     #: from Re in a scale run that touches every degree, because every
-    #: candidate has an equally strong Sa peak and a fifth above it. The tonic
-    #: of a scale is its lowest note, so this term breaks such ties in favour
-    #: of the lowest well-supported candidate. Set to 0.0 to disable.
-    w_lowest: float = 0.12
+    #: candidate has an equally strong Sa peak and a fifth above it -- a run
+    #: has a peak above Re too, it just is not a Pa. The tonic of a scale is
+    #: its lowest note, so this term breaks such ties in favour of the lowest
+    #: well-supported candidate. Set to 0.0 to disable.
+    #:
+    #: The weight has to be high enough to survive peak-height jitter. Measured
+    #: over 63 phrases, tonics and phrases of the accuracy suite, plus a
+    #: C3-B5 sweep and drone-backed phrases, 0.12 got 59 right and 0.25 got 62;
+    #: every failure that 0.25 fixed was Sa read as Re, by a margin of 0.2% of
+    #: the total score. Over a sweep of clean-tone note lengths, 0.12 scored 8
+    #: of 11 and 0.25 scored 9 of 11.
+    #:
+    #: Do not raise this much further. 0.50 scores 2 more of the synthetic
+    #: cases than 0.25, but it is not worth it: at 0.40 and above a phrase
+    #: that dips to a mandra below Sa stops being misread as Re and starts
+    #: locking onto the mandra itself, an octave low, and one speech sample
+    #: moved from 339.9 Hz to 169.1 Hz -- a whole octave. Trading a mild
+    #: confusion for octave errors is a bad deal, and the two extra synthetic
+    #: cases are a contour artefact (one degree carrying double the histogram
+    #: mass) rather than anything a singer does.
+    #:
+    #: The obvious risk is that a dominant prior just picks the lowest note,
+    #: which is wrong when a tanpura an octave below the voice puts its Pa
+    #: under the singer's Sa. Tested directly, that case is fine at every
+    #: weight: ``min_peak_ratio`` means a quiet drone's Pa does not count as
+    #: sung, so the lowest supported pitch is the voice's own Sa. It is the low
+    #: weight that fails there, not a high one -- at 0.12 and a quiet drone the
+    #: answer came out as Re.
+    w_lowest: float = 0.25
     #: A candidate is treated as "the lowest note" when it lies within this
     #: many cents of the lowest strongly-supported pitch in the recording.
     lowest_tolerance_cents: float = 60.0
@@ -162,8 +187,27 @@ class TonicParams:
     #: merged, because Essentia returns its search-range floor on audio
     #: without a drone.
     essentia_agree_cents: float = 50.0
-    #: Score multiplier applied to a candidate that Essentia also supports.
-    essentia_agreement_boost: float = 1.15
+    #: Agreement is judged on the *pitch class*, ignoring the octave, because
+    #: an octave-uncertain estimator still carries real information about which
+    #: note is the tonic. Measured over eight tonics on a tanpura-style drone,
+    #: Essentia named the right pitch class 4 times out of 8 but the right
+    #: octave only 1 time out of 8; the misses that are not octave slips land a
+    #: fifth away, which is a different note entirely. On drone-less material it
+    #: was 62 to 560 cents off in pitch class every time, so this recognises
+    #: genuine support without inventing it.
+    essentia_ignore_octave: bool = True
+    #: Score multiplier applied to a candidate Essentia supports in the same
+    #: octave. Kept small on purpose. Measured on the sample set, 1.15 was
+    #: enough to flip a 10% score gap and move a speech file from 76.93 Hz to
+    #: 83.70 Hz, which is not a correction but a coin toss. At 1.08 the
+    #: histogram winner is left alone in every case tried, so Essentia confirms
+    #: a near-tie instead of overruling the ranking.
+    essentia_agreement_boost: float = 1.08
+    #: Weaker multiplier when only the pitch class agrees and the octave does
+    #: not. An octave error is evidence about the note and against the
+    #: register, so it should count for less than a direct agreement but more
+    #: than nothing.
+    essentia_octave_boost: float = 1.04
     #: Essentia's answer is discarded if it sits at the very edge of its
     #: search range, which is its failure mode on drone-less audio.
     essentia_reject_edge_hz: float = 5.0

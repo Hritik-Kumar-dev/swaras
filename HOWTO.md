@@ -292,7 +292,7 @@ Options: `swar serve --port 9000`, `--host 0.0.0.0`, `--reload`.
 
 ## 8. Check the accuracy yourself
 
-Four scripts print the measured numbers. Run from the repo root with `samples/`
+Five scripts print the measured numbers. Run from the repo root with `samples/`
 present.
 
 ```bash
@@ -300,6 +300,7 @@ python -m tests.compare_trackers    # Stage 1: F0 error against known sweeps
 python -m tests.tonic_accuracy      # Stage 2: Sa recovery
 python -m tests.segment_accuracy    # Stages 3-4: round trip
 python -m tests.shruti_accuracy     # Stage 5: the shruti grid
+python tests/performance_accuracy   # a realistic performance, not clean tones
 ```
 
 `tonic_accuracy` expects roughly:
@@ -312,6 +313,20 @@ python -m tests.shruti_accuracy     # Stage 5: the shruti grid
 
 `segment_accuracy` should report **exact** for all five phrase shapes at all
 three tonics with Sa supplied.
+
+`performance_accuracy` is the one to read if you want an honest picture rather
+than a flattering one. It builds a phrase with a tanpura drone, vibrato, meends
+and dynamics, and should report the full khayal line as exact:
+
+```
+  everything (a full khayal line)     22/22  notes  Sa   -0.0c  exact
+```
+
+It also prints a note-length sweep, where the clean-tone row is *worse* than
+the sung one and two entries read `+199` (Sa seen as Re). That is a known
+limitation rather than a broken install; the README explains why, and
+`tests/test_performance.py` and `tests/test_tonic.py` both pin the behaviour so
+a change in it is noticed.
 
 ---
 

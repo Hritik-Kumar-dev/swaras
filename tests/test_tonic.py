@@ -12,7 +12,7 @@ import pytest
 from swaras._essentia import essentia_available
 from swaras.cents import cents_between, hz_to_cents
 from swaras.config import TonicParams
-from swaras.pitch import PitchContour, PyinPitchDetector, get_detector
+from swaras.pitch import MelodiaPitchDetector, PitchContour, PyinPitchDetector, get_detector
 from swaras.tonic import (
     TonicCandidate,
     TonicResult,
@@ -24,6 +24,7 @@ from swaras.tonic import (
     detect_tonic_histogram,
     local_maxima,
     manual_tonic,
+    _octave_equivalent_delta,
     merge_essentia,
     sample_histogram,
     score_candidate,
@@ -441,8 +442,11 @@ def test_merge_essentia_resorts_when_boost_promotes_a_candidate() -> None:
         hz=261.63, cents=float(hz_to_cents(261.63, 27.5)), score=1.0, confidence=1.0,
         sa_peak=1.0, pa_peak=0.5, octave_peak=0.5,
     )
+    # A 5% gap, which the default 1.08 boost can cross. A wider gap is
+    # deliberately out of reach -- see
+    # test_essentia_support_confirms_but_does_not_override.
     runner_up = TonicCandidate(
-        hz=196.0, cents=float(hz_to_cents(196.0, 27.5)), score=0.9, confidence=0.9,
+        hz=196.0, cents=float(hz_to_cents(196.0, 27.5)), score=0.95, confidence=0.95,
         sa_peak=1.0, pa_peak=0.2, octave_peak=0.0,
     )
     result = TonicResult(candidates=(best, runner_up), method="histogram")
@@ -476,6 +480,90 @@ def test_merge_essentia_rejects_search_edge() -> None:
     assert merged.candidates[0].methods == ("histogram",)
 
 
+def test_merge_essentia_credits_an_octave_error_as_pitch_class_support() -> None:
+    """An octave-off answer is evidence about the note, not about the register.
+
+    Measured on a tanpura-style drone, Essentia named the right pitch class in
+    1 case out of 8 and the right octave in 1 of 8. Comparing raw frequencies
+    threw the pitch-class evidence away, which is why the khayal sample
+    reported "no match" from a model that had in fact found the right note.
+    """
+    c = TonicCandidate(
+        hz=261.63, cents=float(cents_between(27.5, 261.63)), score=1.0, confidence=1.0,
+        sa_peak=1.0, pa_peak=0.5, octave_peak=0.5,
+    )
+    result = TonicResult(candidates=(c,), method="histogram")
+    merged = merge_essentia(result, 130.81, TonicParams(essentia_agree_cents=50.0))
+    assert "essentia-octave" in merged.candidates[0].methods
+    assert "essentia" not in merged.candidates[0].methods
+    assert merged.candidates[0].score > c.score
+    # The octave is wrong, so the user is told it rather than quietly trusting it.
+    assert "octave" in (merged.warning or "")
+
+
+def test_merge_essentia_ignores_an_octave_error_when_told_to() -> None:
+    c = TonicCandidate(
+        hz=261.63, cents=float(cents_between(27.5, 261.63)), score=1.0, confidence=1.0,
+        sa_peak=1.0, pa_peak=0.5, octave_peak=0.5,
+    )
+    result = TonicResult(candidates=(c,), method="histogram")
+    params = TonicParams(essentia_agree_cents=50.0, essentia_ignore_octave=False)
+    merged = merge_essentia(result, 130.81, params)
+    assert "essentia-octave" not in merged.candidates[0].methods
+    assert "does not match" in (merged.warning or "")
+
+
+def test_merge_essentia_does_not_credit_a_fifth_as_support() -> None:
+    """A perfect fifth is a different note, even though it is only 702 cents.
+
+    Folding to pitch class must not slide into folding to the nearest
+    consonant interval, or a Pa/Ma confusion would be read as agreement.
+    """
+    c = TonicCandidate(
+        hz=261.63, cents=float(cents_between(27.5, 261.63)), score=1.0, confidence=1.0,
+        sa_peak=1.0, pa_peak=0.5, octave_peak=0.5,
+    )
+    result = TonicResult(candidates=(c,), method="histogram")
+    merged = merge_essentia(result, 392.0, TonicParams(essentia_agree_cents=50.0))
+    assert merged.candidates[0].methods == ("histogram",)
+
+
+def test_octave_equivalent_delta_folds_to_pitch_class() -> None:
+    assert _octave_equivalent_delta(261.63, 130.81) == pytest.approx(0.0, abs=1.0)
+    assert _octave_equivalent_delta(261.63, 261.63) == pytest.approx(0.0)
+    # Symmetric, and reported in [0, 600] however far apart the octaves are.
+    assert _octave_equivalent_delta(130.81, 261.63) == pytest.approx(
+        _octave_equivalent_delta(261.63, 130.81)
+    )
+    assert 0.0 <= _octave_equivalent_delta(261.63, 392.0) <= 600.0
+    # A fifth is 701 cents raw, but pitch-class distance goes the shorter way
+    # round the octave, so it reports ~500.
+    assert _octave_equivalent_delta(261.63, 392.0) == pytest.approx(500.0, abs=1.0)
+
+
+def test_essentia_support_confirms_but_does_not_override() -> None:
+    """The boost must break a near-tie, not overrule a clear lead.
+
+    At 1.15 the boost flipped a 10% score gap and moved a speech sample from
+    76.93 Hz to 83.70 Hz, which is a coin toss dressed up as a correction.
+    """
+    lead = TonicCandidate(
+        hz=76.93, cents=float(cents_between(27.5, 76.93)), score=1.263, confidence=1.0,
+        sa_peak=1.0, pa_peak=0.4, octave_peak=0.4,
+    )
+    close = TonicCandidate(
+        hz=83.70, cents=float(cents_between(27.5, 83.70)), score=1.141, confidence=0.90,
+        sa_peak=0.8, pa_peak=0.4, octave_peak=0.4,
+    )
+    result = TonicResult(candidates=(lead, close), method="histogram")
+    params = TonicParams()
+    # Essentia supports the runner-up; the ranking must survive.
+    assert params.essentia_agreement_boost < 1.263 / 1.141
+    merged = merge_essentia(result, 83.70, params)
+    assert merged.hz == pytest.approx(76.93)
+    assert "essentia" in merged.candidates[1].methods
+
+
 def test_merge_essentia_with_none_is_a_no_op() -> None:
     c = TonicCandidate(
         hz=261.63, cents=1200.0, score=1.0, confidence=1.0,
@@ -483,6 +571,120 @@ def test_merge_essentia_with_none_is_a_no_op() -> None:
     )
     result = TonicResult(candidates=(c,), method="histogram")
     assert merge_essentia(result, None).candidates == result.candidates
+
+
+# --- the lowest-note prior -------------------------------------------------
+
+
+def test_a_scale_run_resolves_to_its_lowest_note_not_its_strongest() -> None:
+    """Sa must win a scale run, even when another degree has a taller peak.
+
+    In a run that touches every degree, every candidate has an equally strong
+    peak *and* a fifth above it -- there is a peak above Re too, it just is not
+    a Pa. So the peak terms cannot separate Sa from Re at all, and the decision
+    rests on the lowest-note prior. At the old weight of 0.12 the two came out
+    0.2% apart in score and Re won whenever the peak jitter went its way.
+    """
+    from tests.synthetic import sequence
+
+    from swaras.tonic import detect_tonic_histogram
+
+    degrees = [0, 200, 400, 700, 900, 1100, 900, 700, 400, 200, 0]
+    freqs = [261.63 * 2.0 ** (c / 1200.0) for c in degrees]
+    contour = MelodiaPitchDetector().estimate(sequence(freqs, note_duration_s=0.40), 22050)
+    got = detect_tonic_histogram(contour, TonicParams(use_essentia=False))
+    assert float(cents_between(261.63, got.hz)) == pytest.approx(0.0, abs=15.0)
+
+
+def test_steady_tones_can_still_defeat_the_prior_and_that_is_known() -> None:
+    """Document the residual failure, so a change in it is noticed.
+
+    At some note lengths the tracked contour dwells on one degree and gives it
+    roughly double the histogram mass of every other. That is not jitter a
+    prior can absorb: recovering from it needs a weight of 0.50, which was
+    measured and rejected because it makes the tonic lock onto an octave-low
+    mandra and flips a speech sample's octave. Perfectly sustained synthetic
+    tones are the worst case; the realistic phrases in
+    ``tests/test_performance.py``, which have vibrato, glides, an envelope and
+    a drone, are exact at every note length tried.
+    """
+    from tests.synthetic import sequence
+
+    from swaras.tonic import detect_tonic_histogram
+
+    degrees = [0, 200, 400, 700, 900, 1100, 900, 700, 400, 200, 0]
+    freqs = [261.63 * 2.0 ** (c / 1200.0) for c in degrees]
+    contour = MelodiaPitchDetector().estimate(sequence(freqs, note_duration_s=0.55), 22050)
+    got = detect_tonic_histogram(contour, TonicParams(use_essentia=False))
+    assert abs(float(cents_between(261.63, got.hz))) > 15.0, (
+        f"steady tones no longer defeat the prior (Sa now {got.hz:.1f} Hz); the "
+        "rejected 0.50 weight and the README's known limitations are worth "
+        "revisiting"
+    )
+
+
+def test_the_prior_does_not_lock_onto_an_octave_low_mandra() -> None:
+    """A guard on the weight from the other direction.
+
+    A mandra an octave below Sa is the lowest pitch in a phrase that dips to
+    it, so a prior heavy enough to dominate the peak terms will call the
+    mandra the tonic. That is the failure that ruled out 0.50, and it is much
+    worse than being mildly confused: it is an octave error, which is the
+    mistake this stage is most often wrong about in the first place.
+    """
+    from tests.synthetic import sequence
+
+    from swaras.pipeline import transcribe
+
+    sa = 261.63
+    degrees = [-1200, 0, 200, 400, 700, 900, 1100, 900, 700, 400, 200, -1200]
+    freqs = [sa * 2.0 ** (c / 1200.0) for c in degrees]
+    y = sequence(freqs, note_duration_s=0.45)
+    result = transcribe(y, 22050, detector="melodia")
+    error = float(cents_between(sa, result.tonic.hz))
+    # Confused, yes, but by a fifth-ish rather than locked an octave low.
+    assert abs(error) < 600.0, f"tonic locked {error:.0f} cents from Sa"
+
+
+def test_the_lowest_note_prior_is_strong_enough_to_break_a_tie() -> None:
+    """A regression guard on the weight itself.
+
+    This is the arithmetic that failed: the prior is the only term that can
+    separate Sa from Re in a scale run, so if it drops much below the measured
+    value the original bug returns.
+    """
+    params = TonicParams()
+    assert params.w_lowest >= 0.25
+
+
+def test_a_quiet_drone_does_not_become_the_tonic() -> None:
+    """The prior must not simply mean "the lowest note in the audio".
+
+    A tanpura an octave below the voice puts its Pa under the singer's Sa, and
+    a dominant prior would call that Pa the tonic. ``min_peak_ratio`` is what
+    saves it: a quiet drone's Pa does not count as sung, so the lowest
+    supported pitch is the voice's own Sa.
+    """
+    from tests.synthetic import meend, sung_note, tanpura_drone
+
+    from swaras.tonic import detect_tonic_histogram
+
+    sa = 261.63
+    degrees = [0, 200, 400, 700, 900, 1100, 900, 700, 400, 200, 0]
+    parts: list[np.ndarray] = []
+    for i, c in enumerate(degrees):
+        f = sa * 2.0 ** (c / 1200.0)
+        parts.append(sung_note(f, 0.55, 22050, vibrato_rate_hz=5.5, vibrato_cents=35.0, seed=i))
+        if i + 1 < len(degrees):
+            parts.append(meend(f, sa * 2.0 ** (degrees[i + 1] / 1200.0), 0.11, 22050))
+    voice = np.concatenate(parts)
+    voice = voice / max(np.max(np.abs(voice)), 1e-9) * 0.8
+    # Sa and Pa an octave below the singer, so the drone's Pa is the lower pitch.
+    drone = tanpura_drone(sa / 2, voice.size / 22050, 22050, fifth_hz=sa / 2 * 1.4983070768766815, seed=7)
+    mix = voice + drone[: voice.size] * 0.08 / max(np.max(np.abs(drone)), 1e-9)
+    contour = MelodiaPitchDetector().estimate(mix, 22050)
+    got = detect_tonic_histogram(contour, TonicParams(use_essentia=False))
+    assert float(cents_between(sa, got.hz)) == pytest.approx(0.0, abs=15.0)
 
 
 # --- manual override -------------------------------------------------------
